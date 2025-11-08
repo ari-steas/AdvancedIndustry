@@ -7,7 +7,7 @@ using VRage.Game.ModAPI;
 using VRage.Utils;
 using VRageMath;
 
-namespace AdvancedIndustry.Data.Scripts.AdvancedIndustry.Shared.ExternalAPI
+namespace AdvancedIndustry.Shared.ExternalAPI
 {
     /// <summary>
     ///     Class used to communicate with the Modular Assemblies Framework mod. <br /><br />

@@ -1,10 +1,10 @@
 ﻿using System;
-using AdvancedIndustry.Data.Scripts.AdvancedIndustry.Shared.ExternalAPI;
 using AdvancedIndustry.Shared.ExternalAPI;
 using AdvancedIndustry.Shared.Utils;
 using Sandbox.ModAPI;
 using System.Collections.Generic;
 using System.Linq;
+using AdvancedIndustry.Shared.Assemblies.PipeAssembly;
 using AdvancedIndustry.Shared.Definitions.BaseDefinitions;
 using VRageMath;
 
@@ -58,6 +58,39 @@ namespace AdvancedIndustry.Shared.Definitions
             DisplayApiFail();
         }
 
+        public static bool GetDefinitionForSubtype<TDefinition>(string subtypeId, out TDefinition def) where TDefinition : AssemblyBlockDefinition
+        {
+            if (typeof(TDefinition) == typeof(FluidPipeDefinition))
+            {
+                foreach (var definition in FluidPipeDefinitions)
+                {
+                    foreach (var subtype in definition.SubtypeIds)
+                    {
+                        if (subtype != subtypeId)
+                            continue;
+                        def = definition as TDefinition;
+                        return true;
+                    }
+                }
+            }
+            else if (typeof(TDefinition) == typeof(FactoryDefinition))
+            {
+                foreach (var definition in FactoryDefinitions)
+                {
+                    foreach (var subtype in definition.SubtypeIds)
+                    {
+                        if (subtype != subtypeId)
+                            continue;
+                        def = definition as TDefinition;
+                        return true;
+                    }
+                }
+            }
+
+            def = null;
+            return false;
+        }
+
         /// <summary>
         ///     Converts and registers internal AdvancedIndustry AssemblyBlockDefinitions into valid Modular Assemblies definitions.
         /// <remarks>
@@ -71,9 +104,11 @@ namespace AdvancedIndustry.Shared.Definitions
 
             // no clean way to combine all AssemblyBlockDefinitions into a single collection
             foreach (var pipeDefinition in FluidPipeDefinitions)
-                HandlePartDefinition(pipeDefinition, ref assemblyDefinitions);
+                HandlePartDefinition(pipeDefinition, true, ref assemblyDefinitions);
             foreach (var factoryDefinition in FactoryDefinitions)
-                HandlePartDefinition(factoryDefinition, ref assemblyDefinitions);
+                HandlePartDefinition(factoryDefinition, false, ref assemblyDefinitions);
+
+            Log.Info("DefinitionManager", $"Generated {assemblyDefinitions.Count} dynamic assembly definitions.");
 
             // clone definitions into container
             var container = new DefinitionDefs.ModularDefinitionContainer
@@ -84,7 +119,17 @@ namespace AdvancedIndustry.Shared.Definitions
             foreach (var definition in assemblyDefinitions.Values)
             {
                 // TODO onPartAdd, remove, destroyed callbacks in factory assemblies
-                container.PhysicalDefs[i++] = (DefinitionDefs.ModularPhysicalDefinition) definition;
+                var modDef = (DefinitionDefs.ModularPhysicalDefinition)definition;
+                if (definition.IsFluidNetwork && !definition.Name.EndsWith("Out") && !definition.Name.EndsWith("In")) // TODO better method of differentiating in/out fluid systems
+                {
+                    modDef.OnInit = PipeNetworkManager.OnInit;
+                    modDef.OnPartAdd = PipeNetworkManager.OnPartAdd;
+                    modDef.OnPartRemove = PipeNetworkManager.OnPartRemove;
+                    modDef.OnPartDestroy = PipeNetworkManager.OnPartDestroy;
+                    modDef.OnAssemblyClose = PipeNetworkManager.OnAssemblyClose;
+                    Log.Info("DefinitionManager", $"Assigned PipeNetworkManager delegates for definition {definition.Name}.");
+                }
+                container.PhysicalDefs[i++] = modDef;
             }
 
             // send generated definitions to framework
@@ -98,14 +143,17 @@ namespace AdvancedIndustry.Shared.Definitions
                     Log.Exception("DefinitionManager", new Exception($"Failed to register assembly definition with ID {asmDefId}."), true);
                 }
             }
+
+            Log.Info("DefinitionManager", $"Registered {validDefinitions.Length} assembly definitions.");
         }
 
         /// <summary>
         /// Sorts AssemblyBlockDefinitions into a DefId-Def dictionary.
         /// </summary>
         /// <param name="def"></param>
+        /// <param name="isFluidNetwork"></param>
         /// <param name="modularDefs"></param>
-        private static void HandlePartDefinition(AssemblyBlockDefinition def, ref Dictionary<string, DynamicAssemblyDef> modularDefs)
+        private static void HandlePartDefinition(AssemblyBlockDefinition def, bool isFluidNetwork, ref Dictionary<string, DynamicAssemblyDef> modularDefs)
         {
             foreach (var assemblyTag in def.AssemblyTags)
             {
@@ -116,7 +164,7 @@ namespace AdvancedIndustry.Shared.Definitions
                     modularDefs.Add(assemblyTag, modDef);
                 }
 
-                modDef.AddPartDef(def);
+                modDef.AddPartDef(def, isFluidNetwork);
             }
         }
 
@@ -185,21 +233,25 @@ namespace AdvancedIndustry.Shared.Definitions
         ///     ModularPhysicalDefinition uses fixed-size arrays; using them directly would be most inefficient.
         /// </remarks>
         /// </summary>
-        private struct DynamicAssemblyDef
+        private class DynamicAssemblyDef
         {
             public readonly string Name;
+            public bool IsFluidNetwork;
             public readonly HashSet<string> SubtypeIds;
             public readonly Dictionary<string, Dictionary<Vector3I, string[]>> AllowedConnections;
 
             public DynamicAssemblyDef(string name)
             {
                 Name = name;
+                IsFluidNetwork = false;
                 SubtypeIds = new HashSet<string>();
                 AllowedConnections = new Dictionary<string, Dictionary<Vector3I, string[]>>();
             }
 
-            public void AddPartDef(AssemblyBlockDefinition def)
+            public void AddPartDef(AssemblyBlockDefinition def, bool isFluidNetwork)
             {
+                IsFluidNetwork |= isFluidNetwork;
+
                 foreach (var id in def.SubtypeIds)
                 {
                     if (!SubtypeIds.Add(id))

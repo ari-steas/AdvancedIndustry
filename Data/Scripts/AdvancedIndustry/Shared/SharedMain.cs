@@ -1,6 +1,7 @@
 ﻿using AdvancedIndustry.Shared.ExternalAPI;
 using AdvancedIndustry.Shared.Utils;
 using System;
+using AdvancedIndustry.Shared.Assemblies.PipeAssembly;
 using AdvancedIndustry.Shared.Definitions;
 using VRage.Game.Components;
 
@@ -50,6 +51,7 @@ namespace AdvancedIndustry.Shared
             try
             {
                 DefinitionManager.Update();
+                PipeNetworkManager.Update();
             }
             catch (Exception ex)
             {
@@ -67,6 +69,7 @@ namespace AdvancedIndustry.Shared
                 Log.Info("SharedMain", "Start unload...");
                 Log.IncreaseIndent();
                 
+                PipeNetworkManager.Unload();
                 DefinitionManager.Unload();
                 ApiManager.Unload();
                 GlobalData.Unload();

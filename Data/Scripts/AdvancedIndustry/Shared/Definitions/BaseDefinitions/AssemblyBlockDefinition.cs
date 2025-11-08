@@ -6,6 +6,8 @@ using VRageMath;
 namespace AdvancedIndustry.Shared.Definitions.BaseDefinitions
 {
     [ProtoContract]
+    [ProtoInclude(2001, typeof(FluidPipeDefinition))]
+    [ProtoInclude(2002, typeof(FactoryDefinition))]
     public class AssemblyBlockDefinition : DefinitionBase
     {
         /// <summary>

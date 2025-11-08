@@ -5,7 +5,10 @@ using AdvancedIndustry.Shared.ExternalAPI;
 
 namespace AdvancedIndustry.Shared.Definitions.BaseDefinitions
 {
-    [ProtoContract]
+    [ProtoContract(UseProtoMembersOnly = true)]
+    [ProtoInclude(1001, typeof(AssemblyBlockDefinition))]
+    [ProtoInclude(1002, typeof(RecipeDefinition))]
+    [ProtoInclude(1003, typeof(FluidDefinition))]
     public abstract class DefinitionBase
     {
         // can't define preprocessor directives, otherwise would have excluded this
@@ -16,7 +19,7 @@ namespace AdvancedIndustry.Shared.Definitions.BaseDefinitions
         /// <summary>
         /// Unique name for this definition.
         /// </summary>
-        [ProtoIgnore] public string Name { get; private set; }
+        [ProtoIgnore] public string Name { get; set; }
 
         public void Init<TDefinition>(string defName) where TDefinition : DefinitionBase
         {
