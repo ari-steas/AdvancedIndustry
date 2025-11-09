@@ -7,13 +7,19 @@ namespace AdvancedIndustry.Shared.Definitions.BaseDefinitions
     [ProtoContract]
     public class FluidDefinition : DefinitionBase
     {
-        public string[] AllowedPipeTags;
-        public float Density;
+        [ProtoMember(1)] public string[] AllowedPipeTags;
+        [ProtoMember(2)] public float Density;
 
         public override bool Verify(out string reason)
         {
             bool isValid = true;
             reason = "";
+
+            if (AllowedPipeTags == null || AllowedPipeTags.Length == 0)
+            {
+                reason += "Null or empty AllowedPipeTags array!\n";
+                isValid = false;
+            }
 
             return isValid;
         }

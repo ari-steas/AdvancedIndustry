@@ -1,11 +1,12 @@
-﻿using System;
+﻿using AdvancedIndustry.Shared.Assemblies.FactoryAssembly;
+using AdvancedIndustry.Shared.Assemblies.PipeAssembly;
+using AdvancedIndustry.Shared.Definitions.BaseDefinitions;
 using AdvancedIndustry.Shared.ExternalAPI;
 using AdvancedIndustry.Shared.Utils;
 using Sandbox.ModAPI;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using AdvancedIndustry.Shared.Assemblies.PipeAssembly;
-using AdvancedIndustry.Shared.Definitions.BaseDefinitions;
 using VRageMath;
 
 namespace AdvancedIndustry.Shared.Definitions
@@ -46,7 +47,7 @@ namespace AdvancedIndustry.Shared.Definitions
 
         public static void Update()
         {
-            if (_needsModularRegister && MyAPIGateway.Session.GameplayFrameCounter > 5) // wait a few ticks for everything to init
+            if (_needsModularRegister && MyAPIGateway.Session.GameplayFrameCounter > 30) // wait a few ticks for everything to init
             {
                 RegisterModularDefinitions();
                 _needsModularRegister = false;
@@ -103,10 +104,35 @@ namespace AdvancedIndustry.Shared.Definitions
             Dictionary<string, DynamicAssemblyDef> assemblyDefinitions = new Dictionary<string, DynamicAssemblyDef>();
 
             // no clean way to combine all AssemblyBlockDefinitions into a single collection
-            foreach (var pipeDefinition in FluidPipeDefinitions)
-                HandlePartDefinition(pipeDefinition, true, ref assemblyDefinitions);
-            foreach (var factoryDefinition in FactoryDefinitions)
-                HandlePartDefinition(factoryDefinition, false, ref assemblyDefinitions);
+            foreach (var pipeDef in FluidPipeDefinitions)
+            {
+                foreach (var assemblyTag in pipeDef.AssemblyTags)
+                {
+                    DynamicAssemblyDef modDef;
+                    if (!assemblyDefinitions.TryGetValue(assemblyTag, out modDef))
+                    {
+                        modDef = new DynamicAssemblyDef(assemblyTag);
+                        assemblyDefinitions.Add(assemblyTag, modDef);
+                    }
+
+                    modDef.AddPartDef(pipeDef);
+                }
+            }
+
+            foreach (var facDef in FactoryDefinitions)
+            {
+                foreach (var assemblyTag in facDef.AssemblyTags)
+                {
+                    DynamicAssemblyDef modDef;
+                    if (!assemblyDefinitions.TryGetValue(assemblyTag, out modDef))
+                    {
+                        modDef = new DynamicAssemblyDef(assemblyTag, facDef.SubtypeIds);
+                        assemblyDefinitions.Add(assemblyTag, modDef);
+                    }
+
+                    modDef.AddPartDef(facDef);
+                }
+            }
 
             Log.Info("DefinitionManager", $"Generated {assemblyDefinitions.Count} dynamic assembly definitions.");
 
@@ -120,15 +146,30 @@ namespace AdvancedIndustry.Shared.Definitions
             {
                 // TODO onPartAdd, remove, destroyed callbacks in factory assemblies
                 var modDef = (DefinitionDefs.ModularPhysicalDefinition)definition;
-                if (definition.IsFluidNetwork && !definition.Name.EndsWith("Out") && !definition.Name.EndsWith("In")) // TODO better method of differentiating in/out fluid systems
+
+                switch (definition.Type)
                 {
-                    modDef.OnInit = PipeNetworkManager.OnInit;
-                    modDef.OnPartAdd = PipeNetworkManager.OnPartAdd;
-                    modDef.OnPartRemove = PipeNetworkManager.OnPartRemove;
-                    modDef.OnPartDestroy = PipeNetworkManager.OnPartDestroy;
-                    modDef.OnAssemblyClose = PipeNetworkManager.OnAssemblyClose;
-                    Log.Info("DefinitionManager", $"Assigned PipeNetworkManager delegates for definition {definition.Name}.");
+                    case DynamicAssemblyDef.DefinitionType.Pipe:
+                        modDef.OnInit = PipeNetworkManager.OnInit;
+                        modDef.OnPartAdd = PipeNetworkManager.OnPartAdd;
+                        modDef.OnPartRemove = PipeNetworkManager.OnPartRemove;
+                        modDef.OnPartDestroy = PipeNetworkManager.OnPartDestroy;
+                        modDef.OnAssemblyClose = PipeNetworkManager.OnAssemblyClose;
+                        Log.Info("DefinitionManager", $"Assigned PipeNetworkManager delegates for definition {definition.Name}.");
+                        break;
+                    case DynamicAssemblyDef.DefinitionType.Factory:
+                        // TODO: better method of differentiating factory assemblies
+                        modDef.BaseBlockSubtypes = definition.MainFactoryBlock;
+
+                        modDef.OnInit = FactoryManager.OnInit;
+                        modDef.OnPartAdd = FactoryManager.OnPartAdd;
+                        modDef.OnPartRemove = FactoryManager.OnPartRemove;
+                        modDef.OnPartDestroy = FactoryManager.OnPartDestroy;
+                        modDef.OnAssemblyClose = FactoryManager.OnAssemblyClose;
+                        Log.Info("DefinitionManager", $"Assigned FactoryManager delegates for definition {definition.Name}.");
+                        break;
                 }
+
                 container.PhysicalDefs[i++] = modDef;
             }
 
@@ -145,27 +186,6 @@ namespace AdvancedIndustry.Shared.Definitions
             }
 
             Log.Info("DefinitionManager", $"Registered {validDefinitions.Length} assembly definitions.");
-        }
-
-        /// <summary>
-        /// Sorts AssemblyBlockDefinitions into a DefId-Def dictionary.
-        /// </summary>
-        /// <param name="def"></param>
-        /// <param name="isFluidNetwork"></param>
-        /// <param name="modularDefs"></param>
-        private static void HandlePartDefinition(AssemblyBlockDefinition def, bool isFluidNetwork, ref Dictionary<string, DynamicAssemblyDef> modularDefs)
-        {
-            foreach (var assemblyTag in def.AssemblyTags)
-            {
-                DynamicAssemblyDef modDef;
-                if (!modularDefs.TryGetValue(assemblyTag, out modDef))
-                {
-                    modDef = new DynamicAssemblyDef(assemblyTag);
-                    modularDefs.Add(assemblyTag, modDef);
-                }
-
-                modDef.AddPartDef(def, isFluidNetwork);
-            }
         }
 
         private static void OnDefinitionApiReady()
@@ -236,22 +256,31 @@ namespace AdvancedIndustry.Shared.Definitions
         private class DynamicAssemblyDef
         {
             public readonly string Name;
-            public bool IsFluidNetwork;
+            public DefinitionType Type;
+            public string[] MainFactoryBlock;
             public readonly HashSet<string> SubtypeIds;
             public readonly Dictionary<string, Dictionary<Vector3I, string[]>> AllowedConnections;
 
             public DynamicAssemblyDef(string name)
             {
                 Name = name;
-                IsFluidNetwork = false;
                 SubtypeIds = new HashSet<string>();
                 AllowedConnections = new Dictionary<string, Dictionary<Vector3I, string[]>>();
+                Type = DefinitionType.Pipe;
+                MainFactoryBlock = null;
             }
 
-            public void AddPartDef(AssemblyBlockDefinition def, bool isFluidNetwork)
+            public DynamicAssemblyDef(string name, string[] mainFactoryBlock)
             {
-                IsFluidNetwork |= isFluidNetwork;
+                Name = name;
+                SubtypeIds = new HashSet<string>();
+                AllowedConnections = new Dictionary<string, Dictionary<Vector3I, string[]>>();
+                Type = DefinitionType.Factory;
+                MainFactoryBlock = mainFactoryBlock;
+            }
 
+            public void AddPartDef(AssemblyBlockDefinition def)
+            {
                 foreach (var id in def.SubtypeIds)
                 {
                     if (!SubtypeIds.Add(id))
@@ -272,6 +301,12 @@ namespace AdvancedIndustry.Shared.Definitions
                     AllowedConnections = def.AllowedConnections
                 };
                 return mDef;
+            }
+
+            public enum DefinitionType
+            {
+                Pipe,
+                Factory,
             }
         }
     }

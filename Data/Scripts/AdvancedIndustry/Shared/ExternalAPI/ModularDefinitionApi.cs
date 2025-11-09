@@ -689,6 +689,12 @@ namespace AdvancedIndustry.Shared.ExternalAPI
             /// </summary>
             [ProtoMember(4)]
             public string BaseBlockSubtype { get; set; }
+
+            /// <summary>
+            ///     The primary block of a PhysicalAssembly. Make sure this is an AssemblyCore block OR null.
+            /// </summary>
+            [ProtoMember(5)]
+            public string[] BaseBlockSubtypes { get; set; }
         }
     }
 }

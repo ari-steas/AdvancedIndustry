@@ -46,27 +46,25 @@ namespace AdvancedIndustry.Shared.Definitions
                 {
                     "LargeBlockSmallGenerator",
                 },
-                AssemblyTags = new[]
-                {
-                    "PipeIn",
-                    "PipeOut",
-                },
-                AllowedConnections = new Dictionary<string, Dictionary<Vector3I, string[]>>
-                {
-                    ["PipeIn"] = new Dictionary<Vector3I, string[]>
-                    {
-                        [Vector3I.Up] = Array.Empty<string>(),
-                    },
-                    ["PipeOut"] = new Dictionary<Vector3I, string[]>
-                    {
-                        [Vector3I.Backward] = Array.Empty<string>(),
-                    },
-                },
                 Recipes = new[]
                 {
                     "TestOutputRecipe",
-                }
-            },
+                },
+                PipeInputs = new Dictionary<string, Vector3I[]>
+                {
+                    ["Pipe"] = new []
+                    {
+                        Vector3I.Up,
+                    },
+                },
+                PipeOutputs = new Dictionary<string, Vector3I[]>
+                {
+                    ["Pipe"] = new []
+                    {
+                        Vector3I.Backward,
+                    },
+                },
+            }
         };
 
         private RecipeDefinition[] _recipeDefinitions = 
@@ -77,14 +75,22 @@ namespace AdvancedIndustry.Shared.Definitions
                 ProcessTime = 1,
                 Outputs = new Dictionary<RecipeDefinition.RecipeMaterial, float>
                 {
-                    [new RecipeDefinition.RecipeMaterial { SubtypeId = "TestFluid", Type = RecipeDefinition.RecipeMaterial.MaterialType.Fluid }] = 1,
+                    [new RecipeDefinition.RecipeMaterial { SubtypeId = "TestFluid", Type = RecipeDefinition.RecipeMaterial.MaterialType.Fluid }] = 0.5f/60f,
                 }
             }
         };
 
         private FluidDefinition[] _fluidDefinitions = 
         {
-
+            new FluidDefinition
+            {
+                Name = "TestFluid",
+                AllowedPipeTags = new []
+                {
+                    "Pipe",
+                },
+                Density = 1,
+            }
         };
 
         public override void LoadData()

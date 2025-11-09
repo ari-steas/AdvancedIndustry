@@ -69,5 +69,12 @@ namespace AdvancedIndustry.Shared.Utils
 
             return 0;
         }
+
+        public static Vector3I BlockToGridCoords(IMyCubeBlock block, Vector3I position)
+        {
+            var matrix = block.LocalMatrix;
+            matrix.Translation /= block.CubeGrid.GridSize;
+            return (Vector3I) Vector3.Transform(position, matrix);
+        }
     }
 }
